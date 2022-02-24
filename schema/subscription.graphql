@@ -1,0 +1,7 @@
+type Subscription {
+  """
+  Подписка на новые сообщения в чате.
+  Если чата с таким `id` нет, то ошибка.
+  """
+  newMessage(chatId: ID!): Message!
+}
