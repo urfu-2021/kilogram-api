@@ -104,7 +104,7 @@ func (r *Resolver) LoadState() {
 		state.ChatsByID[chat.ID] = chat
 
 		if chat.OwnerLogin != nil {
-			chat.Owner = state.UsersByLogin[*chat.OwnerLogin]
+			chat.Creator = state.UsersByLogin[*chat.OwnerLogin]
 		}
 
 		chat.AllMembersByLogin = make(map[string]*model.User, len(chat.AllMembers))
@@ -124,7 +124,10 @@ func (r *Resolver) LoadState() {
 		}
 
 		chat.Observers = make(map[string]*model.ChatObserver)
+		chat.MessageID = uint64(len(chat.AllMessages))
 	}
+
+	state.ChatID = uint64(len(state.Chats))
 
 	r.State = state
 

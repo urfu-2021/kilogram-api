@@ -3,11 +3,11 @@ module kilogram-api
 go 1.17
 
 require (
-	github.com/99designs/gqlgen v0.16.0
+	github.com/99designs/gqlgen v0.17.2
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/rs/cors v1.8.2
-	github.com/vektah/gqlparser/v2 v2.2.0
+	github.com/vektah/gqlparser/v2 v2.4.0
 )
 
 require (
@@ -19,9 +19,9 @@ require (
 	github.com/mitchellh/mapstructure v1.2.3 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/urfave/cli/v2 v2.3.0 // indirect
-	golang.org/x/mod v0.4.2 // indirect
-	golang.org/x/sys v0.0.0-20210510120138-977fb7262007 // indirect
-	golang.org/x/tools v0.1.5 // indirect
+	golang.org/x/mod v0.5.1 // indirect
+	golang.org/x/sys v0.0.0-20211019181941-9d821ace8654 // indirect
+	golang.org/x/tools v0.1.9 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
-	gopkg.in/yaml.v2 v2.2.4 // indirect
+	gopkg.in/yaml.v2 v2.2.8 // indirect
 )

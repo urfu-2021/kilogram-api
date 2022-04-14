@@ -71,13 +71,17 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
-		CreateChat     func(childComplexity int, typeArg model.ChatType, name string, members []string) int
-		Register       func(childComplexity int, login string, password string, name string) int
-		SendMessage    func(childComplexity int, chatID string, text string) int
-		UpdateChat     func(childComplexity int, id string, image *string, name *string) int
-		UpdateUser     func(childComplexity int, image *string, name *string) int
-		UpsertChatMeta func(childComplexity int, id string, key string, val string) int
-		UpsertUserMeta func(childComplexity int, key string, val string) int
+		CreateChat        func(childComplexity int, typeArg model.ChatType, name string, members []string) int
+		DeleteChat        func(childComplexity int, id string) int
+		DeleteMessage     func(childComplexity int, chatID string, messageID string) int
+		EditMessage       func(childComplexity int, chatID string, messageID string, text string) int
+		Register          func(childComplexity int, login string, password string, name string) int
+		SendMessage       func(childComplexity int, chatID string, text string) int
+		UpdateChat        func(childComplexity int, id string, image *string, name *string) int
+		UpdateUser        func(childComplexity int, image *string, name *string) int
+		UpsertChatMeta    func(childComplexity int, id string, key string, val string) int
+		UpsertMessageMeta func(childComplexity int, chatID string, messageID string, key string, val string) int
+		UpsertUserMeta    func(childComplexity int, key string, val string) int
 	}
 
 	Query struct {
@@ -105,7 +109,11 @@ type MutationResolver interface {
 	CreateChat(ctx context.Context, typeArg model.ChatType, name string, members []string) (*model.Chat, error)
 	UpdateChat(ctx context.Context, id string, image *string, name *string) (*model.Chat, error)
 	UpsertChatMeta(ctx context.Context, id string, key string, val string) (*model.Chat, error)
+	DeleteChat(ctx context.Context, id string) (bool, error)
 	SendMessage(ctx context.Context, chatID string, text string) (*model.Message, error)
+	EditMessage(ctx context.Context, chatID string, messageID string, text string) (*model.Message, error)
+	UpsertMessageMeta(ctx context.Context, chatID string, messageID string, key string, val string) (*model.Message, error)
+	DeleteMessage(ctx context.Context, chatID string, messageID string) (bool, error)
 }
 type QueryResolver interface {
 	SignIn(ctx context.Context, login string, password string) (*string, error)
@@ -258,6 +266,42 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Mutation.CreateChat(childComplexity, args["type"].(model.ChatType), args["name"].(string), args["members"].([]string)), true
 
+	case "Mutation.deleteChat":
+		if e.complexity.Mutation.DeleteChat == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteChat_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.DeleteChat(childComplexity, args["id"].(string)), true
+
+	case "Mutation.deleteMessage":
+		if e.complexity.Mutation.DeleteMessage == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteMessage_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.DeleteMessage(childComplexity, args["chatId"].(string), args["messageId"].(string)), true
+
+	case "Mutation.editMessage":
+		if e.complexity.Mutation.EditMessage == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_editMessage_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.EditMessage(childComplexity, args["chatId"].(string), args["messageId"].(string), args["text"].(string)), true
+
 	case "Mutation.register":
 		if e.complexity.Mutation.Register == nil {
 			break
@@ -317,6 +361,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Mutation.UpsertChatMeta(childComplexity, args["id"].(string), args["key"].(string), args["val"].(string)), true
+
+	case "Mutation.upsertMessageMeta":
+		if e.complexity.Mutation.UpsertMessageMeta == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_upsertMessageMeta_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.UpsertMessageMeta(childComplexity, args["chatId"].(string), args["messageId"].(string), args["key"].(string), args["val"].(string)), true
 
 	case "Mutation.upsertUserMeta":
 		if e.complexity.Mutation.UpsertUserMeta == nil {
@@ -619,7 +675,6 @@ type Mutation {
 
   """
   Создание нового чата. Владельцем станет текущий пользователь.
-  Для того, чтобы писать личное сообщение пользователю, создавать чат не надо.
   """
   createChat(type: ChatType!, name: String!, members: [String!]!): Chat!
 
@@ -637,10 +692,40 @@ type Mutation {
   upsertChatMeta(id: ID!, key: String!, val: String!): Chat
 
   """
+  Удаление чата.
+  Действие может быть выполнено только владельцем чата.
+  Возвращаемое значение ` + "`" + `true` + "`" + ` говорит об успешности операции.
+  """
+  deleteChat(id: ID!): Boolean!
+
+  """
   Отправить сообщение в чат.
-  Если чата с таким ` + "`" + `id` + "`" + ` нет, то ошибка.
+  Если чата с таким ` + "`" + `chatId` + "`" + ` нет, то ошибка.
   """
   sendMessage(chatId: ID!, text: String!): Message
+
+  """
+  Редактирование сообщения.
+  Если чата с таким ` + "`" + `chatId` + "`" + ` нет, то ошибка.
+  Если в чате нет сообщения с таким ` + "`" + `messageId` + "`" + `, то ошибка.
+  Действие может быть выполнено только автором сообщения.
+  """
+  editMessage(chatId: ID!, messageId: ID!, text: String!): Message
+
+  """
+  Обновление мета-данных сообщения.
+  Данные по одинаковому ключу будут перезаписаны.
+  Если чата с таким ` + "`" + `chatId` + "`" + ` нет, то ошибка.
+  Если в чате нет сообщения с таким ` + "`" + `messageId` + "`" + `, то ошибка.
+  """
+  upsertMessageMeta(chatId: ID!, messageId: ID!, key: String!, val: String!): Message
+
+  """
+  Удаление сообщения.
+  Действие может быть выполнено владельцем чата, либо автором сообщения.
+  Возвращаемое значение ` + "`" + `true` + "`" + ` говорит об успешности операции.
+  """
+  deleteMessage(chatId: ID!, messageId: ID!): Boolean!
 }
 `, BuiltIn: false},
 	{Name: "schema/query.graphql", Input: `type Query {
@@ -781,6 +866,78 @@ func (ec *executionContext) field_Mutation_createChat_args(ctx context.Context, 
 		}
 	}
 	args["members"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_deleteChat_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["id"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_deleteMessage_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["chatId"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("chatId"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["chatId"] = arg0
+	var arg1 string
+	if tmp, ok := rawArgs["messageId"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("messageId"))
+		arg1, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["messageId"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_editMessage_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["chatId"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("chatId"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["chatId"] = arg0
+	var arg1 string
+	if tmp, ok := rawArgs["messageId"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("messageId"))
+		arg1, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["messageId"] = arg1
+	var arg2 string
+	if tmp, ok := rawArgs["text"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("text"))
+		arg2, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["text"] = arg2
 	return args, nil
 }
 
@@ -928,6 +1085,48 @@ func (ec *executionContext) field_Mutation_upsertChatMeta_args(ctx context.Conte
 		}
 	}
 	args["val"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_upsertMessageMeta_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["chatId"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("chatId"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["chatId"] = arg0
+	var arg1 string
+	if tmp, ok := rawArgs["messageId"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("messageId"))
+		arg1, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["messageId"] = arg1
+	var arg2 string
+	if tmp, ok := rawArgs["key"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("key"))
+		arg2, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["key"] = arg2
+	var arg3 string
+	if tmp, ok := rawArgs["val"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("val"))
+		arg3, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["val"] = arg3
 	return args, nil
 }
 
@@ -1362,14 +1561,14 @@ func (ec *executionContext) _Chat_owner(ctx context.Context, field graphql.Colle
 		Object:     "Chat",
 		Field:      field,
 		Args:       nil,
-		IsMethod:   false,
+		IsMethod:   true,
 		IsResolver: false,
 	}
 
 	ctx = graphql.WithFieldContext(ctx, fc)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Owner, nil
+		return obj.Owner(), nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1868,6 +2067,48 @@ func (ec *executionContext) _Mutation_upsertChatMeta(ctx context.Context, field 
 	return ec.marshalOChat2ᚖkilogramᚑapiᚋmodelᚐChat(ctx, field.Selections, res)
 }
 
+func (ec *executionContext) _Mutation_deleteChat(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Mutation_deleteChat_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().DeleteChat(rctx, args["id"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
 func (ec *executionContext) _Mutation_sendMessage(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -1905,6 +2146,126 @@ func (ec *executionContext) _Mutation_sendMessage(ctx context.Context, field gra
 	res := resTmp.(*model.Message)
 	fc.Result = res
 	return ec.marshalOMessage2ᚖkilogramᚑapiᚋmodelᚐMessage(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Mutation_editMessage(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Mutation_editMessage_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().EditMessage(rctx, args["chatId"].(string), args["messageId"].(string), args["text"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*model.Message)
+	fc.Result = res
+	return ec.marshalOMessage2ᚖkilogramᚑapiᚋmodelᚐMessage(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Mutation_upsertMessageMeta(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Mutation_upsertMessageMeta_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().UpsertMessageMeta(rctx, args["chatId"].(string), args["messageId"].(string), args["key"].(string), args["val"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*model.Message)
+	fc.Result = res
+	return ec.marshalOMessage2ᚖkilogramᚑapiᚋmodelᚐMessage(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Mutation_deleteMessage(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Mutation_deleteMessage_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().DeleteMessage(rctx, args["chatId"].(string), args["messageId"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Query_signIn(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -2336,14 +2697,14 @@ func (ec *executionContext) ___Directive_description(ctx context.Context, field 
 		Object:     "__Directive",
 		Field:      field,
 		Args:       nil,
-		IsMethod:   false,
+		IsMethod:   true,
 		IsResolver: false,
 	}
 
 	ctx = graphql.WithFieldContext(ctx, fc)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Description, nil
+		return obj.Description(), nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -2352,9 +2713,9 @@ func (ec *executionContext) ___Directive_description(ctx context.Context, field 
 	if resTmp == nil {
 		return graphql.Null
 	}
-	res := resTmp.(string)
+	res := resTmp.(*string)
 	fc.Result = res
-	return ec.marshalOString2string(ctx, field.Selections, res)
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) ___Directive_locations(ctx context.Context, field graphql.CollectedField, obj *introspection.Directive) (ret graphql.Marshaler) {
@@ -2508,14 +2869,14 @@ func (ec *executionContext) ___EnumValue_description(ctx context.Context, field 
 		Object:     "__EnumValue",
 		Field:      field,
 		Args:       nil,
-		IsMethod:   false,
+		IsMethod:   true,
 		IsResolver: false,
 	}
 
 	ctx = graphql.WithFieldContext(ctx, fc)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Description, nil
+		return obj.Description(), nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -2524,9 +2885,9 @@ func (ec *executionContext) ___EnumValue_description(ctx context.Context, field 
 	if resTmp == nil {
 		return graphql.Null
 	}
-	res := resTmp.(string)
+	res := resTmp.(*string)
 	fc.Result = res
-	return ec.marshalOString2string(ctx, field.Selections, res)
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) ___EnumValue_isDeprecated(ctx context.Context, field graphql.CollectedField, obj *introspection.EnumValue) (ret graphql.Marshaler) {
@@ -2642,14 +3003,14 @@ func (ec *executionContext) ___Field_description(ctx context.Context, field grap
 		Object:     "__Field",
 		Field:      field,
 		Args:       nil,
-		IsMethod:   false,
+		IsMethod:   true,
 		IsResolver: false,
 	}
 
 	ctx = graphql.WithFieldContext(ctx, fc)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Description, nil
+		return obj.Description(), nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -2658,9 +3019,9 @@ func (ec *executionContext) ___Field_description(ctx context.Context, field grap
 	if resTmp == nil {
 		return graphql.Null
 	}
-	res := resTmp.(string)
+	res := resTmp.(*string)
 	fc.Result = res
-	return ec.marshalOString2string(ctx, field.Selections, res)
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) ___Field_args(ctx context.Context, field graphql.CollectedField, obj *introspection.Field) (ret graphql.Marshaler) {
@@ -2846,14 +3207,14 @@ func (ec *executionContext) ___InputValue_description(ctx context.Context, field
 		Object:     "__InputValue",
 		Field:      field,
 		Args:       nil,
-		IsMethod:   false,
+		IsMethod:   true,
 		IsResolver: false,
 	}
 
 	ctx = graphql.WithFieldContext(ctx, fc)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Description, nil
+		return obj.Description(), nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -2862,9 +3223,9 @@ func (ec *executionContext) ___InputValue_description(ctx context.Context, field
 	if resTmp == nil {
 		return graphql.Null
 	}
-	res := resTmp.(string)
+	res := resTmp.(*string)
 	fc.Result = res
-	return ec.marshalOString2string(ctx, field.Selections, res)
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) ___InputValue_type(ctx context.Context, field graphql.CollectedField, obj *introspection.InputValue) (ret graphql.Marshaler) {
@@ -2921,6 +3282,38 @@ func (ec *executionContext) ___InputValue_defaultValue(ctx context.Context, fiel
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.DefaultValue, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) ___Schema_description(ctx context.Context, field graphql.CollectedField, obj *introspection.Schema) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "__Schema",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Description(), nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -3197,9 +3590,9 @@ func (ec *executionContext) ___Type_description(ctx context.Context, field graph
 	if resTmp == nil {
 		return graphql.Null
 	}
-	res := resTmp.(string)
+	res := resTmp.(*string)
 	fc.Result = res
-	return ec.marshalOString2string(ctx, field.Selections, res)
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) ___Type_fields(ctx context.Context, field graphql.CollectedField, obj *introspection.Type) (ret graphql.Marshaler) {
@@ -3406,6 +3799,38 @@ func (ec *executionContext) ___Type_ofType(ctx context.Context, field graphql.Co
 	res := resTmp.(*introspection.Type)
 	fc.Result = res
 	return ec.marshalO__Type2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) ___Type_specifiedByURL(ctx context.Context, field graphql.CollectedField, obj *introspection.Type) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "__Type",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.SpecifiedByURL(), nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
 // endregion **************************** field.gotpl *****************************
@@ -3694,6 +4119,16 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, innerFunc)
 
+		case "deleteChat":
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteChat(ctx, field)
+			}
+
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, innerFunc)
+
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
 		case "sendMessage":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_sendMessage(ctx, field)
@@ -3701,6 +4136,30 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, innerFunc)
 
+		case "editMessage":
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_editMessage(ctx, field)
+			}
+
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, innerFunc)
+
+		case "upsertMessageMeta":
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_upsertMessageMeta(ctx, field)
+			}
+
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, innerFunc)
+
+		case "deleteMessage":
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteMessage(ctx, field)
+			}
+
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, innerFunc)
+
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -4163,6 +4622,13 @@ func (ec *executionContext) ___Schema(ctx context.Context, sel ast.SelectionSet,
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("__Schema")
+		case "description":
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				return ec.___Schema_description(ctx, field, obj)
+			}
+
+			out.Values[i] = innerFunc(ctx)
+
 		case "types":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
 				return ec.___Schema_types(ctx, field, obj)
@@ -4290,6 +4756,13 @@ func (ec *executionContext) ___Type(ctx context.Context, sel ast.SelectionSet, o
 		case "ofType":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
 				return ec.___Type_ofType(ctx, field, obj)
+			}
+
+			out.Values[i] = innerFunc(ctx)
+
+		case "specifiedByURL":
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				return ec.___Type_specifiedByURL(ctx, field, obj)
 			}
 
 			out.Values[i] = innerFunc(ctx)
@@ -4958,16 +5431,6 @@ func (ec *executionContext) marshalOMessage2ᚖkilogramᚑapiᚋmodelᚐMessage(
 		return graphql.Null
 	}
 	return ec._Message(ctx, sel, v)
-}
-
-func (ec *executionContext) unmarshalOString2string(ctx context.Context, v interface{}) (string, error) {
-	res, err := graphql.UnmarshalString(v)
-	return res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) marshalOString2string(ctx context.Context, sel ast.SelectionSet, v string) graphql.Marshaler {
-	res := graphql.MarshalString(v)
-	return res
 }
 
 func (ec *executionContext) unmarshalOString2ᚖstring(ctx context.Context, v interface{}) (*string, error) {

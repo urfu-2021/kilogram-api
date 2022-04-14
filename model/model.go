@@ -6,6 +6,8 @@ import (
 )
 
 type Chat struct {
+	MessageID uint64 `json:"-"`
+
 	ID   string   `json:"id"`
 	Type ChatType `json:"type"`
 
@@ -14,7 +16,7 @@ type Chat struct {
 	Image *string `json:"image"`
 	Name  string  `json:"name"`
 
-	Owner      *User   `json:"-"`
+	Creator    *User   `json:"-"`
 	OwnerLogin *string `json:"owner"`
 
 	CreatedAt time.Time `json:"createdAt"`
@@ -28,6 +30,14 @@ type Chat struct {
 	Observers map[string]*ChatObserver `json:"-"`
 
 	M sync.RWMutex `json:"-"`
+}
+
+func (c *Chat) Owner() *User {
+	if c.Creator == nil {
+		return AnonymousUser
+	}
+
+	return c.Creator
 }
 
 func (c *Chat) Members(offset, first *int) []*User {

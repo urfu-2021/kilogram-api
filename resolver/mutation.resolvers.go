@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"kilogram-api/model"
 	"kilogram-api/server"
+	"sync/atomic"
 	"time"
 )
 
@@ -102,7 +103,7 @@ func (r *mutationResolver) CreateChat(ctx context.Context, typeArg model.ChatTyp
 	}
 
 	chat := &model.Chat{
-		ID:   fmt.Sprint(len(r.Chats)),
+		ID:   fmt.Sprint(atomic.AddUint64(&r.ChatID, 1)),
 		Type: typeArg,
 
 		Name: name,
@@ -112,7 +113,7 @@ func (r *mutationResolver) CreateChat(ctx context.Context, typeArg model.ChatTyp
 
 		AllMessagesByID: make(map[string]*model.Message),
 
-		Owner:      user,
+		Creator:    user,
 		OwnerLogin: &user.Login,
 
 		CreatedAt: time.Now(),
@@ -144,7 +145,7 @@ func (r *mutationResolver) UpdateChat(ctx context.Context, id string, image *str
 		return nil, ErrChatDoesnotExists
 	}
 
-	if chat.Owner != user {
+	if chat.Creator != user {
 		return nil, ErrNotAuthorized
 	}
 
@@ -184,7 +185,7 @@ func (r *mutationResolver) UpsertChatMeta(ctx context.Context, id string, key st
 		return nil, ErrChatDoesnotExists
 	}
 
-	if chat.Owner != user {
+	if chat.Creator != user {
 		return nil, ErrNotAuthorized
 	}
 
@@ -194,6 +195,46 @@ func (r *mutationResolver) UpsertChatMeta(ctx context.Context, id string, key st
 	chat.Meta = appendMeta(chat.Meta, key, val)
 
 	return chat, nil
+}
+
+func (r *mutationResolver) DeleteChat(ctx context.Context, id string) (bool, error) {
+	user := GetCurrentUserFrom(ctx)
+
+	if user == nil {
+		return false, ErrNotAuthorized
+	}
+
+	r.ChatsMu.RLock()
+	chat, ok := r.ChatsByID[id]
+	r.ChatsMu.RUnlock()
+
+	if !ok {
+		return false, nil
+	}
+
+	if chat.Creator != user {
+		return false, ErrNotAuthorized
+	}
+
+	r.ChatsMu.Lock()
+	defer r.ChatsMu.Unlock()
+
+	index := -1
+
+	for i, chat := range r.Chats {
+		if chat.ID == id {
+			index = i
+		}
+	}
+
+	if index != -1 {
+		delete(r.ChatsByID, id)
+		r.Chats = append(r.Chats[:index], r.Chats[index+1:]...)
+
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func (r *mutationResolver) SendMessage(ctx context.Context, chatID string, text string) (*model.Message, error) {
@@ -219,12 +260,12 @@ func (r *mutationResolver) SendMessage(ctx context.Context, chatID string, text 
 		}
 	}
 
-	if chat.Type == model.ChatTypeChannel && user != chat.Owner {
+	if chat.Type == model.ChatTypeChannel && user != chat.Creator {
 		return nil, model.ErrUnauthorized
 	}
 
 	message := &model.Message{
-		ID: fmt.Sprint(len(chat.AllMessages)),
+		ID: fmt.Sprint(atomic.AddUint64(&chat.MessageID, 1)),
 
 		Author:      user,
 		AuthorLogin: authorLogin,
@@ -246,6 +287,101 @@ func (r *mutationResolver) SendMessage(ctx context.Context, chatID string, text 
 	}
 
 	return message, nil
+}
+
+func (r *mutationResolver) EditMessage(ctx context.Context, chatID string, messageID string, text string) (*model.Message, error) {
+	user := GetCurrentUserFrom(ctx)
+
+	if user == nil {
+		return nil, ErrNotAuthorized
+	}
+
+	r.ChatsMu.RLock()
+	chat, ok := r.ChatsByID[chatID]
+	r.ChatsMu.RUnlock()
+
+	if !ok {
+		return nil, ErrChatDoesnotExists
+	}
+
+	message, ok := chat.AllMessagesByID[messageID]
+
+	if !ok {
+		return nil, ErrMessageDoesnotExists
+	}
+
+	if user != message.Author {
+		return nil, ErrNotAuthorized
+	}
+
+	message.Text = text
+
+	return message, nil
+}
+
+func (r *mutationResolver) UpsertMessageMeta(ctx context.Context, chatID string, messageID string, key string, val string) (*model.Message, error) {
+	user := GetCurrentUserFrom(ctx)
+
+	if user == nil {
+		return nil, ErrNotAuthorized
+	}
+
+	r.ChatsMu.RLock()
+	chat, ok := r.ChatsByID[chatID]
+	r.ChatsMu.RUnlock()
+
+	if !ok {
+		return nil, ErrChatDoesnotExists
+	}
+
+	message, ok := chat.AllMessagesByID[messageID]
+
+	if !ok {
+		return nil, ErrMessageDoesnotExists
+	}
+
+	message.Meta = appendMeta(message.Meta, key, val)
+
+	return message, nil
+}
+
+func (r *mutationResolver) DeleteMessage(ctx context.Context, chatID string, messageID string) (bool, error) {
+	user := GetCurrentUserFrom(ctx)
+
+	if user == nil {
+		return false, ErrNotAuthorized
+	}
+
+	r.ChatsMu.RLock()
+	chat, ok := r.ChatsByID[chatID]
+	r.ChatsMu.RUnlock()
+
+	if !ok {
+		return false, ErrChatDoesnotExists
+	}
+
+	index := -1
+
+	for i, message := range chat.AllMessages {
+		if message.ID == messageID {
+			index = i
+
+			if message.Author != user && chat.Creator != user {
+				return false, ErrNotAuthorized
+			}
+
+			break
+		}
+	}
+
+	if index != -1 {
+		delete(chat.AllMessagesByID, messageID)
+		chat.AllMessages = append(chat.AllMessages[:index], chat.AllMessages[index+1:]...)
+
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // Mutation returns server.MutationResolver implementation.

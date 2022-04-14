@@ -5,6 +5,8 @@ import (
 )
 
 type State struct {
+	ChatID uint64 `json:"-"`
+
 	Chats []*Chat `json:"chats"`
 	Users []*User `json:"users"`
 
