@@ -130,6 +130,102 @@ func (r *mutationResolver) CreateChat(ctx context.Context, typeArg model.ChatTyp
 	return chat, nil
 }
 
+func (r *mutationResolver) InviteUser(ctx context.Context, chatID string, login string) (bool, error) {
+	user := GetCurrentUserFrom(ctx)
+
+	if user == nil {
+		return false, ErrNotAuthorized
+	}
+
+	r.ChatsMu.RLock()
+	chat, ok := r.ChatsByID[chatID]
+	r.ChatsMu.RUnlock()
+
+	if !ok {
+		return false, ErrChatDoesnotExists
+	}
+
+	if chat.Type == model.ChatTypePrivate {
+		return false, ErrPrivateChatSize
+	}
+
+	r.UsersMu.RLock()
+	member, ok := r.UsersByLogin[login]
+	r.UsersMu.RUnlock()
+
+	if !ok {
+		return false, ErrUserDoesnotExists
+	}
+
+	if chat.Creator != user {
+		return false, ErrNotAuthorized
+	}
+
+	if _, ok := chat.AllMembersByLogin[login]; ok {
+		return false, ErrAlreadyInvited
+	}
+
+	chat.AllMembersByLogin[login] = member
+	chat.AllMembers = append(chat.AllMembers, member)
+
+	return true, nil
+}
+
+func (r *mutationResolver) KickUser(ctx context.Context, chatID string, login string) (bool, error) {
+	user := GetCurrentUserFrom(ctx)
+
+	if user == nil {
+		return false, ErrNotAuthorized
+	}
+
+	r.ChatsMu.RLock()
+	chat, ok := r.ChatsByID[chatID]
+	r.ChatsMu.RUnlock()
+
+	if !ok {
+		return false, ErrChatDoesnotExists
+	}
+
+	if chat.Type == model.ChatTypePrivate {
+		return false, ErrPrivateChatSize
+	}
+
+	if (chat.Type == model.ChatTypeChannel || chat.Type == model.ChatTypeGroup) && len(chat.AllMembers) < 4 {
+		return false, ErrGroupChatSize
+	}
+
+	if chat.Creator.Login == login {
+		return false, ErrKickingYourself
+	}
+
+	if chat.Creator != user {
+		return false, ErrNotAuthorized
+	}
+
+	if _, ok := chat.AllMembersByLogin[login]; !ok {
+		return false, ErrNotInvited
+	}
+
+	index := -1
+
+	for i, member := range chat.AllMembers {
+		if member.Login == login {
+			index = i
+
+			break
+		}
+	}
+
+	if index != -1 {
+		delete(chat.AllMembersByLogin, login)
+		chat.AllMembers = append(chat.AllMembers[:index], chat.AllMembers[index+1:]...)
+
+		return true, nil
+	}
+
+	return true, nil
+}
+
 func (r *mutationResolver) UpdateChat(ctx context.Context, id string, image *string, name *string) (*model.Chat, error) {
 	user := GetCurrentUserFrom(ctx)
 

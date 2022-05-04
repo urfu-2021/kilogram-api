@@ -81,6 +81,8 @@ type ComplexityRoot struct {
 		DeleteChat        func(childComplexity int, id string) int
 		DeleteMessage     func(childComplexity int, chatID string, messageID string) int
 		EditMessage       func(childComplexity int, chatID string, messageID string, text string) int
+		InviteUser        func(childComplexity int, chatID string, login string) int
+		KickUser          func(childComplexity int, chatID string, login string) int
 		Register          func(childComplexity int, login string, password string, name string) int
 		SendMessage       func(childComplexity int, chatID string, text string) int
 		UpdateChat        func(childComplexity int, id string, image *string, name *string) int
@@ -114,6 +116,8 @@ type MutationResolver interface {
 	UpdateUser(ctx context.Context, image *string, name *string) (*model.User, error)
 	UpsertUserMeta(ctx context.Context, key string, val string) (*model.User, error)
 	CreateChat(ctx context.Context, typeArg model.ChatType, name string, members []string) (*model.Chat, error)
+	InviteUser(ctx context.Context, chatID string, login string) (bool, error)
+	KickUser(ctx context.Context, chatID string, login string) (bool, error)
 	UpdateChat(ctx context.Context, id string, image *string, name *string) (*model.Chat, error)
 	UpsertChatMeta(ctx context.Context, id string, key string, val string) (*model.Chat, error)
 	DeleteChat(ctx context.Context, id string) (bool, error)
@@ -323,6 +327,30 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Mutation.EditMessage(childComplexity, args["chatId"].(string), args["messageId"].(string), args["text"].(string)), true
+
+	case "Mutation.inviteUser":
+		if e.complexity.Mutation.InviteUser == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_inviteUser_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.InviteUser(childComplexity, args["chatId"].(string), args["login"].(string)), true
+
+	case "Mutation.kickUser":
+		if e.complexity.Mutation.KickUser == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_kickUser_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.KickUser(childComplexity, args["chatId"].(string), args["login"].(string)), true
 
 	case "Mutation.register":
 		if e.complexity.Mutation.Register == nil {
@@ -708,6 +736,22 @@ type Mutation {
   createChat(type: ChatType!, name: String!, members: [String!]!): Chat!
 
   """
+  Добавить пользователя в чат.
+  Если чата с таким ` + "`" + `id` + "`" + ` нет, то ошибка.
+  Если пользователя с таким ` + "`" + `login` + "`" + ` нет, то ошибка.
+  Если пользователь уже состоит в чате, то ошибка.
+  """
+  inviteUser(chatId: ID!, login: String!): Boolean!
+
+  """
+  Выгнать пользователя из чата.
+  Если чата с таким ` + "`" + `id` + "`" + ` нет, то ошибка.
+  Если пользователя с таким ` + "`" + `login` + "`" + ` нет, то ошибка.
+  Если пользователь не состоит в чате, то ошибка.
+  """
+  kickUser(chatId: ID!, login: String!): Boolean!
+
+  """
   Обновление данных чата.
   Если чата с таким ` + "`" + `id` + "`" + ` нет, то ошибка.
   """
@@ -982,6 +1026,54 @@ func (ec *executionContext) field_Mutation_editMessage_args(ctx context.Context,
 		}
 	}
 	args["text"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_inviteUser_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["chatId"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("chatId"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["chatId"] = arg0
+	var arg1 string
+	if tmp, ok := rawArgs["login"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("login"))
+		arg1, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["login"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_kickUser_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["chatId"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("chatId"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["chatId"] = arg0
+	var arg1 string
+	if tmp, ok := rawArgs["login"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("login"))
+		arg1, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["login"] = arg1
 	return args, nil
 }
 
@@ -2101,6 +2193,90 @@ func (ec *executionContext) _Mutation_createChat(ctx context.Context, field grap
 	res := resTmp.(*model.Chat)
 	fc.Result = res
 	return ec.marshalNChat2ᚖkilogramᚑapiᚋmodelᚐChat(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Mutation_inviteUser(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Mutation_inviteUser_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().InviteUser(rctx, args["chatId"].(string), args["login"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Mutation_kickUser(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Mutation_kickUser_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().KickUser(rctx, args["chatId"].(string), args["login"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Mutation_updateChat(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -4314,6 +4490,26 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "createChat":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createChat(ctx, field)
+			}
+
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, innerFunc)
+
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "inviteUser":
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_inviteUser(ctx, field)
+			}
+
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, innerFunc)
+
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "kickUser":
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_kickUser(ctx, field)
 			}
 
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, innerFunc)
