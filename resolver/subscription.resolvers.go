@@ -10,6 +10,34 @@ import (
 	"math/rand"
 )
 
+func (r *subscriptionResolver) NewEvent(ctx context.Context) (<-chan model.Event, error) {
+	if GetCurrentUserFrom(ctx) == nil {
+		return nil, ErrNotAuthorized
+	}
+
+	events := make(chan model.Event, 1)
+
+	r.ChatsMu.RLock()
+	for _, chat := range r.Chats {
+		chat := chat
+
+		go func() {
+			newMessageChan, err := r.NewMessage(ctx, chat.ID)
+
+			if err != nil {
+				return
+			}
+
+			for message := range newMessageChan {
+				events <- model.MessageEvent{Chat: chat, Message: message}
+			}
+		}()
+	}
+	r.ChatsMu.RUnlock()
+
+	return events, nil
+}
+
 func (r *subscriptionResolver) NewMessage(ctx context.Context, chatID string) (<-chan *model.Message, error) {
 	var login string
 
@@ -25,6 +53,10 @@ func (r *subscriptionResolver) NewMessage(ctx context.Context, chatID string) (<
 
 	if !ok {
 		return nil, ErrChatDoesnotExists
+	}
+
+	if _, ok := chat.AllMembersByLogin[login]; !ok {
+		return nil, ErrNotAuthorized
 	}
 
 	observerID := string(rand.Int31()) // nolint: gosec

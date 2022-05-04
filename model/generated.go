@@ -8,6 +8,18 @@ import (
 	"strconv"
 )
 
+type Event interface {
+	IsEvent()
+}
+
+// Событие с новым сообщением.
+type MessageEvent struct {
+	Chat    *Chat    `json:"chat"`
+	Message *Message `json:"message"`
+}
+
+func (MessageEvent) IsEvent() {}
+
 type ChatType string
 
 const (

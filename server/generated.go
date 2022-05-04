@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"kilogram-api/model"
 	"strconv"
@@ -65,6 +66,11 @@ type ComplexityRoot struct {
 		Text      func(childComplexity int) int
 	}
 
+	MessageEvent struct {
+		Chat    func(childComplexity int) int
+		Message func(childComplexity int) int
+	}
+
 	Meta struct {
 		Key func(childComplexity int) int
 		Val func(childComplexity int) int
@@ -91,6 +97,7 @@ type ComplexityRoot struct {
 	}
 
 	Subscription struct {
+		NewEvent   func(childComplexity int) int
 		NewMessage func(childComplexity int, chatID string) int
 	}
 
@@ -121,6 +128,7 @@ type QueryResolver interface {
 	Users(ctx context.Context, offset *int, first *int) ([]*model.User, error)
 }
 type SubscriptionResolver interface {
+	NewEvent(ctx context.Context) (<-chan model.Event, error)
 	NewMessage(ctx context.Context, chatID string) (<-chan *model.Message, error)
 }
 
@@ -239,6 +247,20 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Message.Text(childComplexity), true
+
+	case "MessageEvent.chat":
+		if e.complexity.MessageEvent.Chat == nil {
+			break
+		}
+
+		return e.complexity.MessageEvent.Chat(childComplexity), true
+
+	case "MessageEvent.message":
+		if e.complexity.MessageEvent.Message == nil {
+			break
+		}
+
+		return e.complexity.MessageEvent.Message(childComplexity), true
 
 	case "Meta.key":
 		if e.complexity.Meta.Key == nil {
@@ -421,6 +443,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Query.Users(childComplexity, args["offset"].(*int), args["first"].(*int)), true
+
+	case "Subscription.newEvent":
+		if e.complexity.Subscription.NewEvent == nil {
+			break
+		}
+
+		return e.complexity.Subscription.NewEvent(childComplexity), true
 
 	case "Subscription.newMessage":
 		if e.complexity.Subscription.NewMessage == nil {
@@ -748,7 +777,22 @@ type Mutation {
   users(offset: Int = 0, first: Int = 10): [User!]!
 }
 `, BuiltIn: false},
-	{Name: "schema/subscription.graphql", Input: `type Subscription {
+	{Name: "schema/subscription.graphql", Input: `"""
+Событие с новым сообщением.
+"""
+type MessageEvent {
+  chat: Chat!
+  message: Message!
+}
+
+union Event = MessageEvent
+
+type Subscription {
+  """
+  Подписка на новые события для текущего пользователя.
+  """
+  newEvent: Event!
+
   """
   Подписка на новые сообщения в чате.
   Если чата с таким ` + "`" + `id` + "`" + ` нет, то ошибка.
@@ -1760,6 +1804,76 @@ func (ec *executionContext) _Message_text(ctx context.Context, field graphql.Col
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
+func (ec *executionContext) _MessageEvent_chat(ctx context.Context, field graphql.CollectedField, obj *model.MessageEvent) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "MessageEvent",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Chat, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.Chat)
+	fc.Result = res
+	return ec.marshalNChat2ᚖkilogramᚑapiᚋmodelᚐChat(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _MessageEvent_message(ctx context.Context, field graphql.CollectedField, obj *model.MessageEvent) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "MessageEvent",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Message, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.Message)
+	fc.Result = res
+	return ec.marshalNMessage2ᚖkilogramᚑapiᚋmodelᚐMessage(ctx, field.Selections, res)
+}
+
 func (ec *executionContext) _Meta_key(ctx context.Context, field graphql.CollectedField, obj *model.Meta) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -2460,6 +2574,51 @@ func (ec *executionContext) _Query___schema(ctx context.Context, field graphql.C
 	res := resTmp.(*introspection.Schema)
 	fc.Result = res
 	return ec.marshalO__Schema2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐSchema(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Subscription_newEvent(ctx context.Context, field graphql.CollectedField) (ret func() graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = nil
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Subscription().NewEvent(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return nil
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return nil
+	}
+	return func() graphql.Marshaler {
+		res, ok := <-resTmp.(<-chan model.Event)
+		if !ok {
+			return nil
+		}
+		return graphql.WriterFunc(func(w io.Writer) {
+			w.Write([]byte{'{'})
+			graphql.MarshalString(field.Alias).MarshalGQL(w)
+			w.Write([]byte{':'})
+			ec.marshalNEvent2kilogramᚑapiᚋmodelᚐEvent(ctx, field.Selections, res).MarshalGQL(w)
+			w.Write([]byte{'}'})
+		})
+	}
 }
 
 func (ec *executionContext) _Subscription_newMessage(ctx context.Context, field graphql.CollectedField) (ret func() graphql.Marshaler) {
@@ -3841,6 +4000,22 @@ func (ec *executionContext) ___Type_specifiedByURL(ctx context.Context, field gr
 
 // region    ************************** interface.gotpl ***************************
 
+func (ec *executionContext) _Event(ctx context.Context, sel ast.SelectionSet, obj model.Event) graphql.Marshaler {
+	switch obj := (obj).(type) {
+	case nil:
+		return graphql.Null
+	case model.MessageEvent:
+		return ec._MessageEvent(ctx, sel, &obj)
+	case *model.MessageEvent:
+		if obj == nil {
+			return graphql.Null
+		}
+		return ec._MessageEvent(ctx, sel, obj)
+	default:
+		panic(fmt.Errorf("unexpected type %T", obj))
+	}
+}
+
 // endregion ************************** interface.gotpl ***************************
 
 // region    **************************** object.gotpl ****************************
@@ -3996,6 +4171,47 @@ func (ec *executionContext) _Message(ctx context.Context, sel ast.SelectionSet, 
 		case "text":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Message_text(ctx, field, obj)
+			}
+
+			out.Values[i] = innerFunc(ctx)
+
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
+var messageEventImplementors = []string{"MessageEvent", "Event"}
+
+func (ec *executionContext) _MessageEvent(ctx context.Context, sel ast.SelectionSet, obj *model.MessageEvent) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, messageEventImplementors)
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MessageEvent")
+		case "chat":
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._MessageEvent_chat(ctx, field, obj)
+			}
+
+			out.Values[i] = innerFunc(ctx)
+
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "message":
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._MessageEvent_message(ctx, field, obj)
 			}
 
 			out.Values[i] = innerFunc(ctx)
@@ -4294,6 +4510,8 @@ func (ec *executionContext) _Subscription(ctx context.Context, sel ast.Selection
 	}
 
 	switch fields[0].Name {
+	case "newEvent":
+		return ec._Subscription_newEvent(ctx, fields[0])
 	case "newMessage":
 		return ec._Subscription_newMessage(ctx, fields[0])
 	default:
@@ -4863,6 +5081,16 @@ func (ec *executionContext) unmarshalNChatType2kilogramᚑapiᚋmodelᚐChatType
 
 func (ec *executionContext) marshalNChatType2kilogramᚑapiᚋmodelᚐChatType(ctx context.Context, sel ast.SelectionSet, v model.ChatType) graphql.Marshaler {
 	return v
+}
+
+func (ec *executionContext) marshalNEvent2kilogramᚑapiᚋmodelᚐEvent(ctx context.Context, sel ast.SelectionSet, v model.Event) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	return ec._Event(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNID2string(ctx context.Context, v interface{}) (string, error) {
