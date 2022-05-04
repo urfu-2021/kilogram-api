@@ -94,6 +94,7 @@ type ComplexityRoot struct {
 
 	Query struct {
 		Chats  func(childComplexity int, offset *int, first *int) int
+		Me     func(childComplexity int) int
 		SignIn func(childComplexity int, login string, password string) int
 		Users  func(childComplexity int, offset *int, first *int) int
 	}
@@ -127,6 +128,7 @@ type MutationResolver interface {
 	DeleteMessage(ctx context.Context, chatID string, messageID string) (bool, error)
 }
 type QueryResolver interface {
+	Me(ctx context.Context) (*model.User, error)
 	SignIn(ctx context.Context, login string, password string) (*string, error)
 	Chats(ctx context.Context, offset *int, first *int) ([]*model.Chat, error)
 	Users(ctx context.Context, offset *int, first *int) ([]*model.User, error)
@@ -447,6 +449,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Query.Chats(childComplexity, args["offset"].(*int), args["first"].(*int)), true
+
+	case "Query.me":
+		if e.complexity.Query.Me == nil {
+			break
+		}
+
+		return e.complexity.Query.Me(childComplexity), true
 
 	case "Query.signIn":
 		if e.complexity.Query.SignIn == nil {
@@ -802,6 +811,11 @@ type Mutation {
 }
 `, BuiltIn: false},
 	{Name: "schema/query.graphql", Input: `type Query {
+  """
+  Информация о текущем пользователе.
+  """
+  me: User
+
   """
   Авторизация.
   Если пользователь и пароль не соответствуют, то ошибка.
@@ -2556,6 +2570,38 @@ func (ec *executionContext) _Mutation_deleteMessage(ctx context.Context, field g
 	res := resTmp.(bool)
 	fc.Result = res
 	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Query_me(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().Me(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*model.User)
+	fc.Result = res
+	return ec.marshalOUser2ᚖkilogramᚑapiᚋmodelᚐUser(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Query_signIn(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -4602,6 +4648,26 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("Query")
+		case "me":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_me(ctx, field)
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return rrm(innerCtx)
+			})
 		case "signIn":
 			field := field
 

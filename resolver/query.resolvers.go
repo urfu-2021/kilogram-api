@@ -10,6 +10,10 @@ import (
 	"kilogram-api/server"
 )
 
+func (r *queryResolver) Me(ctx context.Context) (*model.User, error) {
+	return GetCurrentUserFrom(ctx), nil
+}
+
 func (r *queryResolver) SignIn(ctx context.Context, login string, password string) (*string, error) {
 	r.UsersMu.RLock()
 	user, ok := r.UsersByLogin[login]
